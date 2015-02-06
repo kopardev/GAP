@@ -59,10 +59,6 @@ while ( $sequence = $in->next_seq() ) {
             $seq{$sequence->id}=$sequence->seq;
 }
 
-#foreach my $id (sort keys %seq){
-#	print ">".$id."\n".$seq{$id}."\n";
-#}
-
 open LST, $coordinates;
 
 my $out = Bio::SeqIO->new(-file => ">$genes", -format => 'Fasta');

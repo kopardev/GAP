@@ -270,7 +270,7 @@ options:
 --project  project name
 --wd       working dir (default=current directory)
 --summary  summary file
---templateGff   gff file to use as template
+--templateGff   gff file to use as template (optional)
 
 EOF
 exit 1;

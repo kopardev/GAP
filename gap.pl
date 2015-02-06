@@ -25,7 +25,8 @@ our $cwd;
 $cwd=`pwd`;
 chomp($cwd);
 chdir($gapdir);
-$revision=`/usr/bin/svn info|grep Revision|awk '{print \$2}'`;
+#$revision=`/usr/bin/svn info|grep Revision|awk '{print \$2}'`;
+$revision=`/usr/bin/git log -1 --format="%cD"`; # this only gives last commit date ... not really revision like svn
 chdir($cwd);
 chomp $revision;
 
@@ -62,8 +63,8 @@ GetOptions ( 'all' => \$all,
 die "Assembly fasta file required!\n" unless(defined $fastaFile);
 die "File  $fastaFile Doesn't Exist!\n" unless (-e $fastaFile);
 
-$geneCaller=2 unless (defined $geneCaller);
-die "Invalid GeneCaller!\n" if ($geneCaller!=1 && $geneCaller!=2);
+$geneCaller=2 unless (defined $geneCaller); #default geneCaller is GeneMark
+die "Invalid GeneCaller!\n" if ($geneCaller!=1 && $geneCaller!=2); 
 
 $organismType=2 unless (defined $organismType);
 die "Invalid Organism Type!\n" if ($organismType!=1 && $organismType!=2);
@@ -87,12 +88,10 @@ if (defined $blastx) {
 }
 
 our ($fastaSorted, $workingDir);
-if (defined $outdir) {
-    $workingDir=$outdir;
-} else {
-    $workingDir=`pwd`;
-    chomp $workingDir;
-}
+die "Output folder is required!\n" unless defined $outdir;
+chomp $outdir;
+our $python27="/home/vnkoparde/opt/Python-2.7.2/bin/python";
+$workingDir=$outdir;
 die "$workingDir is not an absolute path! Complete path to output folder is required!\n" unless ( $workingDir =~ /^\// );
 chop($workingDir) if ( $workingDir =~ /\/$/ );
 if (! -d "${workingDir}") {
@@ -103,23 +102,15 @@ my ($fastaFileName,$fastaFilePath,$fastaFileExt);
 ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaFile,qr"\..[^.]*$");
 my $fastatmp = "${workingDir}/${fastaFileName}.fasta.tmp";
 $fastaSorted = "${workingDir}/${fastaFileName}.sorted.fasta";
+open CMD, ">${workingDir}/gap.commands";
 
-if ((defined $force) or ((! -e $fastatmp) or (! -e $fastaSorted))) {
-    my $cmd="${gapdir}/fasta_change_seqid -i $fastaFile -o $fastatmp -p \"${shortName}_contig\" -d";
-    print "$cmd\n";
-    system($cmd);
-    if (! -e $fastatmp) {
-	die "fasta_change_seqid Failed!\n";
-    }
-	
-    if (system("/usr/global/blp/bin/uclust --maxlen 10000000000 --sort $fastatmp --output $fastaSorted")) {
-	die "Uclust failed to sort fasta file\n";
-    }
-    
-    $cmd="${gapdir}/fasta_change_seqid -i $fastaFile -o $fastatmp -p \"${shortName}_contig\" -l";
+# SORT AND CHANGE SEQIDS IN FASTA FILE
+
+if ((defined $force) or (! -e $fastaSorted)) {
+    my $cmd="$python27 ${gapdir}/fasta_sortnrename.py -i $fastaFile -o $fastaSorted -p \"${shortName}_contig\"";
+    print CMD "$cmd\n";
     system($cmd);
 }    
-
 our ($genesFasta, $genesFaa, $genesGff, %jobs, %summaryFiles, $geneCallLastJob, $statusFile);
 $statusFile = "${workingDir}/${shortName}.STATUS";
 $genesFasta = "${workingDir}/${shortName}_genes.fasta";
@@ -156,12 +147,9 @@ if ($callGenes)  {
 	my $waitforjobid;
 	my $genesFastaTmp = $genesFasta.".tmp.fasta";
         if ($geneCaller == 2) {
-            my $gmsn_genes_file="${workingDir}/${shortName}.gmsn_genes";
+            #my $gmsn_genes_file="${workingDir}/${shortName}.gmsn_genes";
             my $GeneMark_cmd="${gapdir}/callGenesWithGeneMark.pl";
             $GeneMark_cmd.=" --sortedFasta $fastaSorted";
-            $GeneMark_cmd.=" --gmsnFile $gmsn_genes_file";
-            $GeneMark_cmd.=" --genesFasta $genesFastaTmp";
-            $GeneMark_cmd.=" --genesGff $genesGff";
             $GeneMark_cmd.=" --prefix $shortName";
             $GeneMark_cmd.=" --wd $workingDir";
 	    $GeneMark_cmd.=" --force" if (defined $force);
@@ -172,30 +160,28 @@ if ($callGenes)  {
 	    $waitforjobid=$job_gm->{jobid};
         }
 	if ($geneCaller == 1) {
-	    my $coordsFile="${workingDir}/${shortName}.glimmercoords";
+	    #my $coordsFile="${workingDir}/${shortName}.glimmercoords";
 	    my $Glimmer_cmd="/usr/bin/perl ${gapdir}/callGenesWithGlimmer.pl";
-	    $Glimmer_cmd.=" $fastaSorted";
-	    $Glimmer_cmd.=" $shortName";
-	    $Glimmer_cmd.=" $workingDir";
-	    $Glimmer_cmd.=" $genesFastaTmp";
-	    $Glimmer_cmd.=" $genesGff";
-	    $Glimmer_cmd.=" $coordsFile";
+            $Glimmer_cmd.=" --sortedFasta $fastaSorted";
+            $Glimmer_cmd.=" --prefix $shortName";
+            $Glimmer_cmd.=" --wd $workingDir";
+	    $Glimmer_cmd.=" --force" if (defined $force);
 	    my $jname="GL_".$shortName;
+	    print CMD "$Glimmer_cmd\n";
 	    $job_gl=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"Glimmer.tmp.out",cmd=>$Glimmer_cmd);
 	    $job_gl->submit();
 #	    push @jobs,$job_gl;
 	    $waitforjobid=$job_gl->{jobid};
 	}
-	my $postGeneCall_cmd="${gapdir}/fasta_change_seqid -i $genesFastaTmp -o $genesFasta -p \"${shortName}_gene\" -a";
-	$postGeneCall_cmd.=" -l" if ($geneCaller ==1);
-	my $jname="PGC_".$shortName;
-	$job_pgc=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"PostGeneCall.tmp.out",cmd=>$postGeneCall_cmd,waitfor=>$waitforjobid);
-	$job_pgc->submit();
-	$geneCallLastJob=$job_pgc;
+	if ((! -e "${genesFasta}") or (! -e "${genesGff}") or (! -e "${genesFaa}") {
+	    print STDERR "Gene calling failed ! $genesFasta or $genesGff or $genesFaa is (are) missing.\n"
+	    exit;
+	}
     }
+    
     if ((! -e "${gcSummaryFile}") or (defined $force)) {
 	my $jname="GCS_".$shortName;
-	my $geneStats_cmd="${gapdir}/calculate_gene_stats --assemblyFasta $fastaSorted --genesFasta $genesFasta -o $gcSummaryFile";
+	my $geneStats_cmd="$python27 ${gapdir}/calculate_gene_stats.py --assemblyFasta $fastaSorted --genesFasta $genesFasta --genesFaa $genesFaa -o $gcSummaryFile";
 	if (defined $geneCallLastJob) {
 	    $job_gcs=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"GeneStats.tmp.out",cmd=>$geneStats_cmd,waitfor=>($job_pgc->{jobid}));
 	} else {
@@ -220,7 +206,7 @@ if ($trnaScan) {
     my $trnaGffFile="${workingDir}/${shortName}_tRNA.gff3";
     my $trnaFastaFile="${workingDir}/${shortName}_tRNA.fasta";
     if (((! -e "$trnaSummaryFile") or (! -e "$trnaGffFile")) or (! -e "$trnaFastaFile") or (defined $force)) {
-	my $trnaScan_cmd="${gapdir}/trnaScan.pl";
+	my $trnaScan_cmd="/usr/bin/perl ${gapdir}/trnaScan.pl";
     	$trnaScan_cmd.=" --project $shortName";
     	$trnaScan_cmd.=" --wd $workingDir";
     	$trnaScan_cmd.=" --fasta $fastaSorted";
@@ -400,7 +386,7 @@ if ($rnammer) {
     if ((! -e $rnammerGff) or (! -e $rnammerFasta) or (! -e $rnammerSummary) or (defined $force)) {
 	system("rm -rf ${workingDir}/rnammer") if (-d "${workingDir}/rnammer");
 	mkdir("${workingDir}/rnammer");
-	my $rnammer_cmd="${gapdir}/rnammer.pl $rnammerKingdom $rnammerGff $rnammerFasta $fastatmp $rnammerSummary";
+	my $rnammer_cmd="/usr/bin/perl ${gapdir}/rnammer.pl $rnammerKingdom $rnammerGff $rnammerFasta $fastatmp $rnammerSummary";
 	print "$rnammer_cmd\n";
 	my $job_rnammer=new Qsub(name=>"rnammer_".$shortName,outFile=>"rnammer.tmp.out",wd=>"${workingDir}/rnammer",cmd=>$rnammer_cmd,memory=>"10G",nproc=>"4");
 	$job_rnammer->submit();
@@ -542,7 +528,7 @@ Genome Annotation Pipeline
 
 Developer : Vishal N Koparde, Ph. D.
 Created   : 120709
-Modified  : 120817
+Modified  : 150202
 EOF
 print "Version   : ",$revision."\n";
 print <<EOF;

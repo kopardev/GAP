@@ -2,6 +2,12 @@
 use strict;
 use warnings;
 
+if (scalar @ARGV != 5) {
+    print "Usage: $0 <kingdom(bak|euk)> <out.gff> <out.fasta> <genome.fasta> <summary.txt>\n";
+    print scalar @ARGV,"\n";
+    exit;
+}
+
 my $rnammerKingdom=shift;
 my $rnammerGff=shift;
 my $rnammerFasta=shift;

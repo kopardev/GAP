@@ -19,7 +19,7 @@ use Bio::Seq;
 my ($project,$workingDir,$fastaSorted,$organismType,$summaryFile,$gff,$outFasta);
 
 GetOptions(
-'project:s' => \$project,
+'project:s' => \$project, # project name is shortName from GAP
 'wd:s' => \$workingDir,
 'fasta:s' => \$fastaSorted,
 'org:i' => \$organismType,
