@@ -24,7 +24,7 @@ sub usage();
 
 usage() if (scalar @ARGV==0);
 
-my ($fastaSorted,$coordsFile,$workingDir,$genesFasta,$genesGff,$prefix,$force,$genesFaa,$help);
+my ($fastaSorted,$predictFile,$workingDir,$genesFasta,$genesGff,$prefix,$force,$genesFaa,$help);
 
 GetOptions ( 'sortedFasta=s' => \$fastaSorted,
              'prefix=s' => \$prefix,
@@ -43,7 +43,7 @@ if (!defined $workingDir) {
 $genesFasta = $prefix."_genes.fasta";
 $genesFaa = $prefix."_genes.faa";
 $genesGff = $prefix."_genes.gff";
-$coordsFile=$prefix.".glimmercoords";
+$predictFile=$prefix.".predict";
 
 my $Glimmer_cmd1="${gapdir}/g3-from-scratch.sh $fasta $prefix";
 my $jname="GL1_".$prefix;
@@ -58,16 +58,13 @@ $job_gl1->submit();
 # $prefix.predict
 # $prefix.train
 
-my $Glimmer_cmd2="${gapdir}/extract_glimmer3_seq.pl ${prefix}.predict $fasta $genesFasta $coordsFile $prefix";
+my $Glimmer_cmd2="perl ${gapdir}/predict2fastagff.pl -c $fastaSorted -l $predictFile -o $genesFasta -g $genesGff -s $prefix -p $genesFaa";
 $jname="GL2_".$prefix;
 $jnameout="GL2_".$prefix.".tmp.out";
 my $job_gl2=new Qsub(name=>$jname,wd=>$workingDir,outfile=>$jnameout,cmd=>$Glimmer_cmd2,waitfor=>"$job_gl1->{jobid}");
 $job_gl2->submit();
 $job_gl2->waitForCompletion();
 
-my $cmd="perl ${gapdir}/glimCoords2gff.pl $coordsFile $prefix $genesGff";
-system($cmd);
-system("rm -rf *.glcoords");
 
 exit;
 

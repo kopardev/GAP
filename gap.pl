@@ -21,6 +21,10 @@ $gapdir=$ENV{'GAPDIR'};
 } else {
 $gapdir="/usr/global/blp/GenomeAnnotationPipeline";
 }
+
+our $python27="/home/vnkoparde/opt/Python-2.7.2/bin/python";
+our $asgardDB="/gpfs_fs/atol/asgardDB/";
+
 our $cwd;
 $cwd=`pwd`;
 chomp($cwd);
@@ -90,7 +94,7 @@ if (defined $blastx) {
 our ($fastaSorted, $workingDir);
 die "Output folder is required!\n" unless defined $outdir;
 chomp $outdir;
-our $python27="/home/vnkoparde/opt/Python-2.7.2/bin/python";
+
 $workingDir=$outdir;
 die "$workingDir is not an absolute path! Complete path to output folder is required!\n" unless ( $workingDir =~ /^\// );
 chop($workingDir) if ( $workingDir =~ /\/$/ );
@@ -142,9 +146,9 @@ $summaryFiles{"rnammer"}="${workingDir}/rnammer/${shortName}.RNAMMER.summary";
 if ($callGenes)  {
     print "will call genes\n";
 	my $gcSummaryFile=$summaryFiles{"GeneCalling"};
+	my $waitForJobID;
     if ((! -e "${genesFasta}") or (! -e "${genesGff}") or (! -e "${genesFaa}")or (defined $force)) {
 	unlink ("${gcSummaryFile}") if (-e "${gcSummaryFile}");
-	my $waitforjobid;
 	my $genesFastaTmp = $genesFasta.".tmp.fasta";
         if ($geneCaller == 2) {
             #my $gmsn_genes_file="${workingDir}/${shortName}.gmsn_genes";
@@ -154,10 +158,11 @@ if ($callGenes)  {
             $GeneMark_cmd.=" --wd $workingDir";
 	    $GeneMark_cmd.=" --force" if (defined $force);
             my $jname = "GM_".$shortName;
+	    print CMD "$GeneMark_cmd\n";
             $job_gm=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"GeneMark.tmp.out",cmd=>$GeneMark_cmd);
             $job_gm->submit();
+	    $waitForJobID=$job_gm->{jobid};
 #            push @jobs,$job_gm;
-	    $waitforjobid=$job_gm->{jobid};
         }
 	if ($geneCaller == 1) {
 	    #my $coordsFile="${workingDir}/${shortName}.glimmercoords";
@@ -170,22 +175,23 @@ if ($callGenes)  {
 	    print CMD "$Glimmer_cmd\n";
 	    $job_gl=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"Glimmer.tmp.out",cmd=>$Glimmer_cmd);
 	    $job_gl->submit();
+	    $waitForJobID=$job_gl->{jobid};
 #	    push @jobs,$job_gl;
-	    $waitforjobid=$job_gl->{jobid};
 	}
-	if ((! -e "${genesFasta}") or (! -e "${genesGff}") or (! -e "${genesFaa}") {
-	    print STDERR "Gene calling failed ! $genesFasta or $genesGff or $genesFaa is (are) missing.\n"
-	    exit;
-	}
+	#if ((! -e "${genesFasta}") or (! -e "${genesGff}") or (! -e "${genesFaa}")) {
+	#    print STDERR "Gene calling failed ! $genesFasta or $genesGff or $genesFaa is (are) missing.\n";
+	#    exit;
+	#}
     }
     
     if ((! -e "${gcSummaryFile}") or (defined $force)) {
 	my $jname="GCS_".$shortName;
-	my $geneStats_cmd="$python27 ${gapdir}/calculate_gene_stats.py --assemblyFasta $fastaSorted --genesFasta $genesFasta --genesFaa $genesFaa -o $gcSummaryFile";
-	if (defined $geneCallLastJob) {
-	    $job_gcs=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"GeneStats.tmp.out",cmd=>$geneStats_cmd,waitfor=>($job_pgc->{jobid}));
+	my $geneStats_cmd="$python27 ${gapdir}/calculate_gene_stats.py --assemblyFasta $fastaSorted --genesFasta $genesFasta --genesFaa $genesFaa --genesGFF $genesGff -o $gcSummaryFile";
+	print CMD "$geneStats_cmd\n";
+	if (defined $waitForJobID) {
+		$job_gcs=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"GeneStats.tmp.out",cmd=>$geneStats_cmd,waitfor=>$waitForJobID);
 	} else {
-	    $job_gcs=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"GeneStats.tmp.out",cmd=>$geneStats_cmd);
+		$job_gcs=new Qsub(name=>$jname,wd=>$workingDir,outfile=>"GeneStats.tmp.out",cmd=>$geneStats_cmd);
 	}
 	$job_gcs->submit();
 	$jobs{"GeneCalling"}=$job_gcs;
@@ -214,7 +220,7 @@ if ($trnaScan) {
     	$trnaScan_cmd.=" --summary $trnaSummaryFile";
     	$trnaScan_cmd.=" --gff $trnaGffFile";
 	$trnaScan_cmd.=" --outFasta $trnaFastaFile";
-    	print "$trnaScan_cmd\n";
+    	print CMD "$trnaScan_cmd\n";
     	$job_trna=new Qsub(name=>"tRNA_".$shortName,outfile=>"tRNA_".$shortName.".tmp.out",wd=>$workingDir,cmd=>$trnaScan_cmd);
     	$job_trna->submit();
     	$jobs{"tRNAScan"}=$job_trna;
@@ -242,7 +248,7 @@ if($rpsblast) {
 	$rps_cmd.=" --fasta ${genesFasta}";
 	$rps_cmd.=" --templateGff ${genesGff}";
 	$rps_cmd.=" --summary ${workingDir}/${shortName}_rpsblast.summary";
-	print "$rps_cmd\n";
+	print CMD "$rps_cmd\n";
 	$job_rps=new Qsub(name=>"RPS_".$shortName,outfile=>"RPS_".$shortName."tmp.out",wd=>$workingDir,cmd=>$rps_cmd);
 	$job_rps->{waitfor}=($jobs{"GeneCalling"})->{jobid} if ($callGenes);
 	$job_rps->submit();
@@ -257,9 +263,14 @@ if($rpsblast) {
 # 
 if ($blastx) {
     print "will run blastx\n";
-    ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastatmp,qr"\..[^.]*$");
-    my $blastxContigsOutFile="${workingDir}/blastxC/blastres_${fastaFileName}.${fastaFileExt}";
-    my $blastxGenesOutFile="${workingDir}/blastxG/blastres_${shortName}_genes.fasta";
+
+    ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaSorted,qr"\..[^.]*$");
+    my $blastxContigsOutFile="${workingDir}/blastxC/blastres_${fastaFileName}.fasta";
+    my $blastxContigsInFasta="${workingDir}/blastxC/${fastaFileName}.fasta";
+    ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($genesFasta,qr"\..[^.]*$");
+    my $blastxGenesOutFile="${workingDir}/blastxG/blastres_${fastaFileName}.fasta";
+    my $blastxGenesInFasta="${workingDir}/blastxG/${fastaFileName}.fasta";
+
     my $blastxContigsGff;
     my $blastxGenesGff;
     if ($blastxdb eq "/data/refdb/nr") {
@@ -269,57 +280,56 @@ if ($blastx) {
 	$blastxContigsGff="${workingDir}/blastxC/blastx_contigs.gff";
 	$blastxGenesGff="${workingDir}/blastxG/blastx_genes.gff";
     }
+
     mkdir("${workingDir}/blastxC") if (! -d "${workingDir}/blastxC");
     mkdir("${workingDir}/blastxG") if (! -d "${workingDir}/blastxG");
+
     if ((defined $force) or ((! -e $blastxContigsOutFile) or (! -e $blastxContigsGff))) {
 	unlink("$blastxContigsOutFile") if (! -e "$blastxContigsOutFile");
 	unlink("$blastxContigsGff") if (! -e "$blastxContigsGff");
-	($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastatmp,qr"\..[^.]*$");
-	my $outFasta="${workingDir}/blastxC/${fastaFileName}.fasta";
-	my $cmd="${gapdir}/fasta_change_seqid -i $fastatmp -o $outFasta -p \"${shortName}_contig\"";
-	system($cmd) if ((! -e $outFasta) or (defined $force));
-	die "$outFasta : File not found!\n" unless (-e $outFasta);
-	my $tmpSummaryFile=$summaryFiles{"Blastx_contigs"};
-	my $blastx_cmd="/usr/bin/perl ${gapdir}/blastx_contigs_asgard.pl ";
-	$blastx_cmd.=" --fasta ${outFasta}";
-	$blastx_cmd.=" --project ${shortName}";
-	$blastx_cmd.=" --db ${blastxdb}";
-	$blastx_cmd.=" --wd ${workingDir}/blastxC";
-	$blastx_cmd.=" --summary ${tmpSummaryFile}";
-    	$blastx_cmd.=" -gff ${blastxContigsGff}";
-	print "${blastx_cmd}\n";
-	my $job_blastx=new Qsub(name=>"BxC_".$shortName,outFile=>"BxC.tmp.out",wd=>"${workingDir}/blastxC",cmd=>$blastx_cmd);
+	symlink("$fastaSorted","$blastxContigsInFasta");
+	my $tmpSummaryBlastxContigFile=$summaryFiles{"Blastx_contigs"};
+	my $blastxC_cmd="/usr/bin/perl ${gapdir}/blastx_contigs_asgard.pl ";
+	$blastxC_cmd.=" --fasta $blastxContigsInFasta";
+	$blastxC_cmd.=" --project ${shortName}";
+	$blastxC_cmd.=" --db ${blastxdb}";
+	$blastxC_cmd.=" --wd ${workingDir}/blastxC";
+	$blastxC_cmd.=" --summary ${tmpSummaryBlastxContigFile}";
+    	$blastxC_cmd.=" -gff ${blastxContigsGff}";
+	print CMD "${blastxC_cmd}\n";
+	my $job_blastx=new Qsub(name=>"BxC_".$shortName,outFile=>"BxC.tmp.out",wd=>"${workingDir}/blastxC",cmd=>$blastxC_cmd);
 	$job_blastx->submit();
 	$jobs{"BlastxContigs"}=$job_blastx;
     }
     if ((defined $force) or ((! -e $blastxGenesOutFile) or (! -e $blastxGenesGff))) {
-	($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastatmp,qr"\..[^.]*$");
-	my $tmpSummaryFile=$summaryFiles{"Blastx_genes"};
+	
+	my $tmpSummaryBlastxGenesFile=$summaryFiles{"Blastx_genes"};
 	if ( (! -e $genesFasta) and (! exists $jobs{"GeneCalling"}) ) {
 		print "Genes file does not exist! Call Genes first!\n";
 	} 
-	symlink("${genesFasta}","${workingDir}/blastxG/${shortName}_genes.fasta");
-	#copy("${genesFasta}","${workingDir}/blastxG/${shortName}_genes.fasta") or die "Genes file does not exists! Call Genes first!)";
-	my $blastx_cmd="/usr/bin/perl ${gapdir}/blastx_genes_asgard.pl ";
-	$blastx_cmd.=" --fasta ${workingDir}/blastxG/${shortName}_genes.fasta";
-	$blastx_cmd.=" --project ${shortName}";
-	$blastx_cmd.=" --db ${blastxdb}";
-	$blastx_cmd.=" --wd ${workingDir}/blastxG";
-	$blastx_cmd.=" --summary ${tmpSummaryFile}";
-    	$blastx_cmd.=" -gff ${blastxGenesGff}";
+	symlink("$genesFasta","$blastxGenesInFasta");
+	my $blastxG_cmd="/usr/bin/perl ${gapdir}/blastx_genes_asgard.pl ";
+	$blastxG_cmd.=" --fasta $blastxGenesInFasta";
+	$blastxG_cmd.=" --project ${shortName}";
+	$blastxG_cmd.=" --db ${blastxdb}";
+	$blastxG_cmd.=" --wd ${workingDir}/blastxG";
+	$blastxG_cmd.=" --summary ${tmpSummaryBlastxGenesFile}";
+    	$blastxG_cmd.=" -gff ${blastxGenesGff}";
 	my $job_blastx;
         if (exists $jobs{"GeneCalling"}) {
-		print "\n\n$blastx_cmd\n\n";
+		print "\n\n$blastxG_cmd\n\n";
 		print "\n\nwaiting!\n\n";
         	my $waitforid=$jobs{"GeneCalling"}->{jobid};
-		$job_blastx=new Qsub(name=>"BxG_".$shortName,outFile=>"BxG.tmp.out",wd=>"${workingDir}/blastxG",cmd=>$blastx_cmd,waitfor=>$waitforid);
+		print CMD "$blastxG_cmd\n";
+		$job_blastx=new Qsub(name=>"BxG_".$shortName,outFile=>"BxG.tmp.out",wd=>"${workingDir}/blastxG",cmd=>$blastxG_cmd,waitfor=>$waitforid);
 		$job_blastx->submit();
 		$jobs{"BlastxGenes"}=$job_blastx;
 	} else {
 		if ( -e $genesFasta ) {
-			print "\n\n$blastx_cmd\n\n";
+			print "\n\n$blastxG_cmd\n\n";
 			print "\n\nnot waiting and found $genesFasta\n\n";
-			$job_blastx=new Qsub(name=>"BxG_".$shortName,outFile=>"BxG.tmp.out",wd=>"${workingDir}/blastxG",cmd=>$blastx_cmd);
+			print CMD "$blastxG_cmd\n";
+			$job_blastx=new Qsub(name=>"BxG_".$shortName,outFile=>"BxG.tmp.out",wd=>"${workingDir}/blastxG",cmd=>$blastxG_cmd);
 			$job_blastx->submit();
 			$jobs{"BlastxGenes"}=$job_blastx;
 		} else {
@@ -339,18 +349,22 @@ if ($blastx) {
 if ($doAsgard) {
     print "will run asgard\n";
     mkdir("${workingDir}/asgard_contigs") if (! -d "${workingDir}/asgard_contigs");
-    symlink("${fastaSorted}","${workingDir}/asgard_contigs/${shortName}_contigs.fasta") or die "Copy failed: $!";
+    ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaSorted,qr"\..[^.]*$");
+    my $asgardContigsInputFasta="${workingDir}/asgard_contigs/${fastaFileName}.fasta";
+    symlink("$fastaSorted","$asgardContigsInputFasta") or die "SymLink of $fastaSorted into ${workingDir}/asgard_contigs failed: $!";
     #copy("${fastaSorted}","${workingDir}/asgard_contigs/${shortName}_contigs.fasta") or die "Copy failed: $!";
-    my $asgard_cmd1="/usr/global/blp/bin/asgard -i ${shortName}_contigs.fasta -p blastx -d /gpfs_fs/atol/asgardDB/UniRef100 -d /gpfs_fs/atol/asgardDB/KEGG -f /gpfs_fs/atol/asgardDB/uniref100.fasta.gz -f /gpfs_fs/atol/asgardDB/genes.pep.gz -l /gpfs_fs/atol/asgardDB/";
-    print "$asgard_cmd1\n";
+    my $asgard_cmd1="/usr/global/blp/bin/asgard -i $asgardContigsInputFasta -p blastx -d ${asgardDB}/UniRef100 -d ${asgardDB}/KEGG -f ${asgardDB}/uniref100.fasta.gz -f ${asgardDB}/genes.pep.gz -l ${asgardDB}/";
+    print CMD "$asgard_cmd1\n";
     my $job_asgard1=new Qsub(name=>"ASG_C".$shortName,outFile=>"ASG_C.tmp.out",wd=>"${workingDir}/asgard_contigs",cmd=>$asgard_cmd1);
     $job_asgard1->submit();
     $jobs{"AsgardContigs"}=$job_asgard1;
     mkdir("${workingDir}/asgard_genes") if (! -d "${workingDir}/asgard_genes");
-    symlink("${genesFasta}","${workingDir}/asgard_genes/${shortName}_genes.fasta");
+    ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($genesFasta,qr"\..[^.]*$");
+    my $asgardGenesInputFasta="${workingDir}/asgard_contigs/${fastaFileName}.fasta";
+    symlink("$genesFasta","$asgardGenesInputFasta") or die "SymLink of $genesFasta into ${workingDir}/asgard_genes failed: $!";;
     #copy("${genesFasta}","${workingDir}/asgard_contigs/${shortName}_genes.fasta") or die "Copy failed: $!";
-    my $asgard_cmd2="/usr/global/blp/bin/asgard -i ${shortName}_genes.fasta -p blastx -d /gpfs_fs/atol/asgardDB/UniRef100 -d /gpfs_fs/atol/asgardDB/KEGG -f /gpfs_fs/atol/asgardDB/uniref100.fasta.gz -f /gpfs_fs/atol/asgardDB/genes.pep.gz -l /gpfs_fs/atol/asgardDB/";
-    print "$asgard_cmd2\n";
+    my $asgard_cmd2="/usr/global/blp/bin/asgard -i $asgardGenesInputFasta -p blastx -d ${asgardDB}/UniRef100 -d ${asgardDB}/KEGG -f ${asgardDB}/uniref100.fasta.gz -f ${asgardDB}/genes.pep.gz -l ${asgardDB}/";
+    print CMD "$asgard_cmd2\n";
     my $job_asgard2;
 	if (exists $jobs{"GeneCalling"}) {
     my $waitforid=$jobs{"GeneCalling"}->{jobid};
@@ -379,14 +393,19 @@ if ($rnammer) {
     print "will run rnammer\n";
     my $rnammerGff="${workingDir}/rnammer/${shortName}_rna.gff";
     my $rnammerFasta="${workingDir}/rnammer/${shortName}_rna.fasta";
+    my $rnammerSINA="${workingDir}/rnammer/${shortName}_rna_sina_classification.txt";
     my $rnammerSummary=$summaryFiles{"rnammer"};
     my $rnammerKingdom;
+    
     $rnammerKingdom="bac" if ($organismType==1);
     $rnammerKingdom="euk" if ($organismType==2);
     if ((! -e $rnammerGff) or (! -e $rnammerFasta) or (! -e $rnammerSummary) or (defined $force)) {
 	system("rm -rf ${workingDir}/rnammer") if (-d "${workingDir}/rnammer");
 	mkdir("${workingDir}/rnammer");
-	my $rnammer_cmd="/usr/bin/perl ${gapdir}/rnammer.pl $rnammerKingdom $rnammerGff $rnammerFasta $fastatmp $rnammerSummary";
+	($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaSorted,qr"\..[^.]*$");
+	my $rnammerInputFasta="${workingDir}/rnammer/${fastaFileName}.fasta";
+	symlink("$fastaSorted","$rnammerInputFasta") or die "SymLink of $fastaSorted into ${workingDir}/rnammer failed: $!";
+	my $rnammer_cmd="$python27 ${gapdir}/rnammer_w_sina_classification.py $rnammerKingdom $rnammerGff $rnammerFasta $rnammerInputFasta $rnammerSummary $rnammerSINA";
 	print "$rnammer_cmd\n";
 	my $job_rnammer=new Qsub(name=>"rnammer_".$shortName,outFile=>"rnammer.tmp.out",wd=>"${workingDir}/rnammer",cmd=>$rnammer_cmd,memory=>"10G",nproc=>"4");
 	$job_rnammer->submit();
@@ -405,13 +424,14 @@ if ($alienHunter) {
     my $alienFile = "${shortName}.alien";
     if ((! -e "${workingDir}/alien_hunter/${alienFile}") or (defined $force)) {
 	system("rm -rf ${workingDir}/alien_hunter") if (-d "${workingDir}/alien_hunter");
-    	system("cp -r /usr/global/blp/alien_hunter $workingDir/");
-    	system("cp ${fastatmp} ${workingDir}/alien_hunter");
-	my ($fastaFileName,$fastaFilePath,$fastaFileExt);
-	($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastatmp,qr"\..[^.]*$");
-    	my $AlienHunter_cmd="/usr/global/blp/bin/alien_hunter ${fastaFileName}.${fastaFileExt} $alienFile";
+	mkdir("${workingDir}/alien_hunter");
+    	#system("cp -r /usr/global/blp/alien_hunter ${workingDir}/alien_hunter");
+	($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaSorted,qr"\..[^.]*$");
+	my $alienHunterInputFasta="${workingDir}/alien_hunter/${fastaFileName}.fasta";
+    	copy("$fastaSorted","$alienHunterInputFasta");
+    	my $AlienHunter_cmd="/usr/global/blp/bin/alien_hunter $alienHunterInputFasta $alienFile";
     	my $jname = "AH_".$shortName;
-   	print "AlienHunter_cmd\n";
+   	print CMD "AlienHunter_cmd\n";
     	$job_ah=new Qsub(name=>$jname,wd=>"${workingDir}/alien_hunter",outfile=>"AlienHunter.tmp.out",cmd=>$AlienHunter_cmd);
     	$job_ah->submit();
 	$jobs{"AlienHunter"}=$job_ah; 
@@ -419,8 +439,8 @@ if ($alienHunter) {
 }
 
 while (checkAllJobStatus(\%jobs) ne "Completed") {
-printJobStatus(\%jobs,$statusFile);
-sleep(10);
+    printJobStatus(\%jobs,$statusFile);
+    sleep(10);
 }
 printJobStatus(\%jobs,$statusFile);
 

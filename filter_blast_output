@@ -60,7 +60,8 @@ fh.close()
 for rec in blast_records:
 	if args["pra"]:
 		read_len=len(sequences[rec.query_id])
-		pra=100.0*(int(rec.alignment_length)-int(rec.gaps))/read_len
+		pra=100.0*3*(int(rec.alignment_length)-int(rec.gaps))/read_len
+		# multiply by 3 as subject is aa and query is nuc
 		if pra<args["pra"]:
 			#print read_len,rec.alignment_length,pra,rec.mismatches,rec.gaps,rec.query_start,rec.query_end,rec.subject_start,rec.subject_end
 			continue
