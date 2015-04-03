@@ -113,7 +113,11 @@ my $nseqHit=`cut -f1 ${gff}|sort|uniq|wc -l`;
 chomp $nseqHit;		
 
 if (defined $summaryFile) {
+my $dbinfo=`/usr/global/blp/ncbi-blast-2.2.25+/bin/blastdbcmd -info -db $blastxdb`;
 open SF,">$summaryFile";
+print SF "############ BLAST DB INFO ############################\n";
+print SF $dbinfo."\n";
+print SF "#######################################################\n";
 print SF "No. of genes              \t\t\t:$nseq\n";
 print SF "No. of genes with Hit(s)  \t\t\t:$nseqHit\n";
 print SF "No. of Unique Proteins Hit\t\t\t:$uniqueProteinsHit\n";

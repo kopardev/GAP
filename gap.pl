@@ -75,8 +75,6 @@ die "Invalid Organism Type!\n" if ($organismType!=1 && $organismType!=2);
 
 die "Short organism name is required!\n" unless(defined $shortName);
 
-$doAsgard=0;
-
 if (defined $all) {
     print "will do all\n";
     $callGenes=1;
@@ -143,7 +141,7 @@ $summaryFiles{"rnammer"}="${workingDir}/rnammer/${shortName}.RNAMMER.summary";
 #| (_| (_| | | | |_| |  __/ | | |  __/\__ \
 # \___\__,_|_|_|\____|\___|_| |_|\___||___/
 # 
-if ($callGenes)  {
+if (defined $callGenes)  {
     print "will call genes\n";
 	my $gcSummaryFile=$summaryFiles{"GeneCalling"};
 	my $waitForJobID;
@@ -206,7 +204,7 @@ if ($callGenes)  {
 #| |_|  _ <| |\  |/ ___ \ ___) | (_| (_| | | | |
 # \__|_| \_\_| \_/_/   \_\____/ \___\__,_|_| |_|
 # 
-if ($trnaScan) {
+if (defined $trnaScan) {
     print "will run trnaScan-SE\n";
     my $trnaSummaryFile=$summaryFiles{"tRNAScan"};
     my $trnaGffFile="${workingDir}/${shortName}_tRNA.gff3";
@@ -232,7 +230,7 @@ if ($trnaScan) {
 #| |  | |_) \__ \ |_) | | (_| \__ \ |_ 
 #|_|  | .__/|___/____/|_|\__,_|___/\__|
 # 
-if($rpsblast) {
+if (defined $rpsblast) {
     print "will run rbsblast\n";
     die "Have you called Genes!\n Could not find ${genesFasta} or ${genesGff}\n" if ((! $callGenes) and ((! -e "${genesFasta}") or (! -e "${genesGff}")));
     if ( (!-e "${workingDir}/${shortName}.COG.rps.gz") or
@@ -261,7 +259,7 @@ if($rpsblast) {
 #| |_) | | (_| \__ \ |_ >  < 
 #|_.__/|_|\__,_|___/\__/_/\_\
 # 
-if ($blastx) {
+if (defined $blastx) {
     print "will run blastx\n";
 
     ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaSorted,qr"\..[^.]*$");
@@ -346,7 +344,7 @@ if ($blastx) {
 # \__,_|___/\__, |\__,_|_|  \__,_|
 #           |___/
 
-if ($doAsgard) {
+if (defined $doAsgard) {
     print "will run asgard\n";
     mkdir("${workingDir}/asgard_contigs") if (! -d "${workingDir}/asgard_contigs");
     ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaSorted,qr"\..[^.]*$");
@@ -389,7 +387,7 @@ if ($doAsgard) {
 #|_|  |_| |_|\__,_|_| |_| |_|_| |_| |_|\___|_|   
 # 
 
-if ($rnammer) {
+if (defined $rnammer) {
     print "will run rnammer\n";
     my $rnammerGff="${workingDir}/rnammer/${shortName}_rna.gff";
     my $rnammerFasta="${workingDir}/rnammer/${shortName}_rna.fasta";
@@ -419,7 +417,7 @@ if ($rnammer) {
 #| (_| | | |  __/ | | |  _  | |_| | | | | ||  __/ |   
 # \__,_|_|_|\___|_| |_|_| |_|\__,_|_| |_|\__\___|_|   
 # 
-if ($alienHunter) {
+if (defined $alienHunter) {
     print "will do alien hunter\n";
     my $alienFile = "${shortName}.alien";
     if ((! -e "${workingDir}/alien_hunter/${alienFile}") or (defined $force)) {
@@ -548,7 +546,7 @@ Genome Annotation Pipeline
 
 Developer : Vishal N Koparde, Ph. D.
 Created   : 120709
-Modified  : 150202
+Modified  : 150403
 EOF
 print "Version   : ",$revision."\n";
 print <<EOF;

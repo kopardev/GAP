@@ -19,11 +19,11 @@ usage() if (scalar @ARGV==0);
 my ($fasta,$blastxdb,$project,$workingDir,$summaryFile,$gff,$help);
 
 GetOptions ( 'fasta=s' => \$fasta,
-   			 'db=s' => \$blastxdb,
+   	     'db=s' => \$blastxdb,
              'project=s' => \$project,
              'wd=s' => \$workingDir,
              'summary=s' => \$summaryFile,
-			 'gff=s' => \$gff,
+             'gff=s' => \$gff,
              'help|?' => \$help);
 
 usage() if ($help);
@@ -100,7 +100,11 @@ my $nseqHit=`cut -f1 ${gff}|sort|uniq|wc -l`;
 chomp $nseqHit;
 
 if (defined $summaryFile) {
+my $dbinfo=`/usr/global/blp/ncbi-blast-2.2.25+/bin/blastdbcmd -info -db $blastxdb`;
 open SF,">$summaryFile";
+print SF "############ BLAST DB INFO ############################\n";
+print SF $dbinfo."\n";
+print SF "#######################################################\n";
 print SF "No. of contigs            \t\t\t:$nseq\n";
 print SF "No. of contigs with Hit(s)\t\t\t:$nseqHit\n";
 print SF "No. of Unique Proteins Hit\t\t\t:$uniqueProteinsHit\n";
