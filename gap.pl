@@ -23,14 +23,19 @@ $gapdir="/usr/global/blp/GenomeAnnotationPipeline";
 }
 
 our $python27="/home/vnkoparde/opt/Python-2.7.2/bin/python";
-our $asgardDB="/gpfs_fs/atol/asgardDB/";
+our $asgardDB="/gpfs_fs/atol/asgardDB";
 
 our $cwd;
 $cwd=`pwd`;
 chomp($cwd);
 chdir($gapdir);
 #$revision=`/usr/bin/svn info|grep Revision|awk '{print \$2}'`;
-$revision=`/usr/bin/git log -1 --format="%cD"`; # this only gives last commit date ... not really revision like svn
+#$revision=`/usr/bin/git log -1 --format="%cD"`; # this only gives last commit date ... not really revision like svn
+if (-r "${gapdir}/version") {
+	$revision=`cat ${gapdir}/version`;chomp $revision;
+} else {
+	$revision="unknown";
+}
 chdir($cwd);
 chomp $revision;
 
@@ -86,7 +91,7 @@ if (defined $all) {
 }
 
 if (defined $blastx) {
-    $blastxdb="/data/refdb/nr" unless (defined $blastxdb);
+    $blastxdb="/gpfs_fs/data1/refdb/nr" unless (defined $blastxdb);
 }
 
 our ($fastaSorted, $workingDir);
@@ -349,9 +354,10 @@ if (defined $doAsgard) {
     mkdir("${workingDir}/asgard_contigs") if (! -d "${workingDir}/asgard_contigs");
     ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaSorted,qr"\..[^.]*$");
     my $asgardContigsInputFasta="${workingDir}/asgard_contigs/${fastaFileName}.fasta";
+    my $asgardContigsInputFastaNoPath="${fastaFileName}.fasta";
     symlink("$fastaSorted","$asgardContigsInputFasta") or die "SymLink of $fastaSorted into ${workingDir}/asgard_contigs failed: $!";
     #copy("${fastaSorted}","${workingDir}/asgard_contigs/${shortName}_contigs.fasta") or die "Copy failed: $!";
-    my $asgard_cmd1="/usr/global/blp/bin/asgard -i $asgardContigsInputFasta -p blastx -d ${asgardDB}/UniRef100 -d ${asgardDB}/KEGG -f ${asgardDB}/uniref100.fasta.gz -f ${asgardDB}/genes.pep.gz -l ${asgardDB}/";
+    my $asgard_cmd1="$asgard -i $asgardContigsInputFastaNoPath -p blastx -d ${asgardDB}/UniRef100 -d ${asgardDB}/KEGG -f ${asgardDB}/uniref100.fasta.gz -f ${asgardDB}/genes.pep.gz -l ${asgardDB}/";
     print CMD "$asgard_cmd1\n";
     my $job_asgard1=new Qsub(name=>"ASG_C".$shortName,outFile=>"ASG_C.tmp.out",wd=>"${workingDir}/asgard_contigs",cmd=>$asgard_cmd1);
     $job_asgard1->submit();
@@ -359,9 +365,10 @@ if (defined $doAsgard) {
     mkdir("${workingDir}/asgard_genes") if (! -d "${workingDir}/asgard_genes");
     ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($genesFasta,qr"\..[^.]*$");
     my $asgardGenesInputFasta="${workingDir}/asgard_contigs/${fastaFileName}.fasta";
+    my $asgardGenesInputFastaNoPath="${fastaFileName}.fasta";
     symlink("$genesFasta","$asgardGenesInputFasta") or die "SymLink of $genesFasta into ${workingDir}/asgard_genes failed: $!";;
     #copy("${genesFasta}","${workingDir}/asgard_contigs/${shortName}_genes.fasta") or die "Copy failed: $!";
-    my $asgard_cmd2="/usr/global/blp/bin/asgard -i $asgardGenesInputFasta -p blastx -d ${asgardDB}/UniRef100 -d ${asgardDB}/KEGG -f ${asgardDB}/uniref100.fasta.gz -f ${asgardDB}/genes.pep.gz -l ${asgardDB}/";
+    my $asgard_cmd2="$asgard -i $asgardGenesInputFastaNoPath -p blastx -d ${asgardDB}/UniRef100 -d ${asgardDB}/KEGG -f ${asgardDB}/uniref100.fasta.gz -f ${asgardDB}/genes.pep.gz -l ${asgardDB}/";
     print CMD "$asgard_cmd2\n";
     my $job_asgard2;
 	if (exists $jobs{"GeneCalling"}) {
