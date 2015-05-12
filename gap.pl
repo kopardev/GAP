@@ -23,7 +23,7 @@ $gapdir="/usr/global/blp/GenomeAnnotationPipeline";
 }
 
 our $python27="/home/vnkoparde/opt/Python-2.7.2/bin/python";
-our $asgardDB="/gpfs_fs/atol/asgardDB";
+our $asgardDB="/gpfs_fs/data1/refdb/asgardDB";
 
 our $cwd;
 $cwd=`pwd`;
@@ -355,6 +355,7 @@ if (defined $doAsgard) {
     ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($fastaSorted,qr"\..[^.]*$");
     my $asgardContigsInputFasta="${workingDir}/asgard_contigs/${fastaFileName}.fasta";
     my $asgardContigsInputFastaNoPath="${fastaFileName}.fasta";
+    system("rm -f $asgardContigsInputFasta") if -e $asgardContigsInputFasta;
     symlink("$fastaSorted","$asgardContigsInputFasta") or die "SymLink of $fastaSorted into ${workingDir}/asgard_contigs failed: $!";
     #copy("${fastaSorted}","${workingDir}/asgard_contigs/${shortName}_contigs.fasta") or die "Copy failed: $!";
     my $asgard_cmd1="$asgard -i $asgardContigsInputFastaNoPath -p blastx -d ${asgardDB}/UniRef100 -d ${asgardDB}/KEGG -f ${asgardDB}/uniref100.fasta.gz -f ${asgardDB}/genes.pep.gz -l ${asgardDB}/";
@@ -364,8 +365,9 @@ if (defined $doAsgard) {
     $jobs{"AsgardContigs"}=$job_asgard1;
     mkdir("${workingDir}/asgard_genes") if (! -d "${workingDir}/asgard_genes");
     ($fastaFileName,$fastaFilePath,$fastaFileExt) = fileparse($genesFasta,qr"\..[^.]*$");
-    my $asgardGenesInputFasta="${workingDir}/asgard_contigs/${fastaFileName}.fasta";
+    my $asgardGenesInputFasta="${workingDir}/asgard_genes/${fastaFileName}.fasta";
     my $asgardGenesInputFastaNoPath="${fastaFileName}.fasta";
+    system("rm -f $asgardGenesInputFasta") if -e $asgardGenesInputFasta;
     symlink("$genesFasta","$asgardGenesInputFasta") or die "SymLink of $genesFasta into ${workingDir}/asgard_genes failed: $!";;
     #copy("${genesFasta}","${workingDir}/asgard_contigs/${shortName}_genes.fasta") or die "Copy failed: $!";
     my $asgard_cmd2="$asgard -i $asgardGenesInputFastaNoPath -p blastx -d ${asgardDB}/UniRef100 -d ${asgardDB}/KEGG -f ${asgardDB}/uniref100.fasta.gz -f ${asgardDB}/genes.pep.gz -l ${asgardDB}/";
@@ -411,7 +413,7 @@ if (defined $rnammer) {
 	my $rnammerInputFasta="${workingDir}/rnammer/${fastaFileName}.fasta";
 	symlink("$fastaSorted","$rnammerInputFasta") or die "SymLink of $fastaSorted into ${workingDir}/rnammer failed: $!";
 	my $rnammer_cmd="$python27 ${gapdir}/rnammer_w_sina_classification.py $rnammerKingdom $rnammerGff $rnammerFasta $rnammerInputFasta $rnammerSummary $rnammerSINA";
-	print "$rnammer_cmd\n";
+	print CMD "$rnammer_cmd\n";
 	my $job_rnammer=new Qsub(name=>"rnammer_".$shortName,outFile=>"rnammer.tmp.out",wd=>"${workingDir}/rnammer",cmd=>$rnammer_cmd,memory=>"10G",nproc=>"4");
 	$job_rnammer->submit();
 	$jobs{"rnammer"}=$job_rnammer;
