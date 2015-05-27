@@ -12,6 +12,9 @@ use lib qw(/usr/global/blp/perllib);
 use Qsub;
 use Bio::Tools::GFF;
 use Bio::Tools::Glimmer;
+use Getopt::Long;
+
+Getopt::Long::Configure("bundling");
 
 my $gapdir;
 if (exists $ENV{'GAPDIR'}) {
@@ -45,7 +48,7 @@ $genesFaa = $prefix."_genes.faa";
 $genesGff = $prefix."_genes.gff";
 $predictFile=$prefix.".predict";
 
-my $Glimmer_cmd1="${gapdir}/g3-from-scratch.sh $fasta $prefix";
+my $Glimmer_cmd1="${gapdir}/g3-from-scratch.sh $fastaSorted $prefix";
 my $jname="GL1_".$prefix;
 my $jnameout="GL1_".$prefix.".tmp.out";
 my $job_gl1=new Qsub(name=>$jname,wd=>$workingDir,outfile=>$jnameout,cmd=>$Glimmer_cmd1);
