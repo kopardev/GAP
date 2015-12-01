@@ -8,8 +8,8 @@ parser=argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormat
 """This script calculate stats for assembly and its gene calls
 
 Author: Vishal N Koparde, Ph. D. 
-Created: 120716
-Modified: 120716
+Created: 120714
+Modified: 120714
 Version: 1.0""",
  version="1.0")
 parser.add_argument('--assemblyFasta',help='input assembly fasta file',dest='afasta',required=True,metavar="<assembly.fasta>")
@@ -66,27 +66,30 @@ shortestgenelen=len(genes[shortestgenename].seq)
 
 avggenelen=totalgenelen*1.0/ngenes
 
-gffcomp=args['gff']+".complement"
+gfffile=open(args['gff'])
+gffcolumns=map(lambda x:x.strip().split("\t"),gfffile.readlines())
+gfffile.close()
 
-os.system("/usr/global/blp/bin/samtools faidx "+args['afasta']);
-os.system("/usr/global/blp/bin/complementBed -i "+args['gff']+" -g "+args['afasta']+".fai > "+gffcomp);
+contig2intlist={}
+for c,s in contigs.iteritems():
+	contig2intlist[c]=[1]*len(s.seq)
+	contig2intlist[c][0]=-1
+	contig2intlist[c][-1]=-1
 
-gffCompFile=open(gffcomp)
-gffclines=gffCompFile.readlines()
-gffCompFile.close()
+for cols in gffcolumns:
+	for x in range(int(cols[3])-1,int(cols[4]),1):
+		contig2intlist[cols[0]][x]=0
 
-seqname=""
 igDistances=[]
-for l in gffclines:
-    cols=l.split("\t")
-    if cols[0]!=seqname:
-        seqname=cols[0]
-        continue
-    else:
-        igDistances.append(int(cols[2])-int(cols[1]))
+for contig,intlist in contig2intlist.iteritems():
+	intlist="".join(map(lambda x:str(x),intlist))
+	intlist=intlist.split("0")
+	intlist=filter(lambda x:not ("-1" in x or x==""),intlist)
+	igDistances.extend(intlist)
 
+igDistances=map(lambda x:len(x),igDistances)
 avgigdist=sum(igDistances)*1.0/len(igDistances)
-
+#print avgigdist
 
 tmpaFasta=args['afasta'].split("/")
 tmpaFasta=tmpaFasta[-1]
